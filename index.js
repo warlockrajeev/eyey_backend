@@ -24,17 +24,26 @@ app.use(express.json());
 app.use(cookieParser());
 
 // ✅ Allow frontend requests
+const allowedOrigins = [
+  "http://localhost:3000",
+  "http://localhost:3001",
+  "http://localhost:3002",
+  "https://eyeyoptics.vercel.app",
+  "https://eyey-admin.vercel.app",
+  "https://eyey-vendor.vercel.app",
+  "https://eyey-vendor-inky.vercel.app",
+];
+
+if (process.env.ALLOWED_ORIGINS) {
+  const envOrigins = process.env.ALLOWED_ORIGINS.split(",")
+    .map((o) => o.trim())
+    .filter(Boolean);
+  allowedOrigins.push(...envOrigins);
+}
+
 app.use(
   cors({
-    origin: [
-      "http://localhost:3000",
-      "http://localhost:3001",
-      "http://localhost:3002",
-      "https://eyeyoptics.vercel.app",
-      "https://eyey-admin.vercel.app",
-      "https://eyey-admin.vercel.app/login",
-      "https://eyey-vendor.vercel.app",
-    ], // Allow frontend domains
+    origin: allowedOrigins,
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: [
@@ -48,6 +57,7 @@ app.use(
     optionsSuccessStatus: 204,
   })
 );
+
 
 // Connect Database
 connectDB();
