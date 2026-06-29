@@ -6,7 +6,7 @@ import admin from "firebase-admin";
 // IMPORTANT: To verify ID tokens, you need the project ID.
 
 const firebaseAdminConfig = {
-    projectId: "eyey-bdcba",
+    projectId: "eyey-e4d56",
 };
 
 if (!admin.apps.length) {

@@ -1,6 +1,8 @@
 import Order from "../models/orderModel.js";
 import User from "../models/userModel.js";
 import Coupon from "../models/couponModel.js";
+import Product from "../models/productModel.js";
+import Vendor from "../models/vendorModel.js";
 
 // Create new order
 const createOrder = async (req, res) => {
@@ -34,6 +36,34 @@ const createOrder = async (req, res) => {
       });
     }
 
+    // Normalize shipping address to match the orderModel schema
+    const normalizedShippingAddress = {
+      name: shippingAddress.name,
+      email: shippingAddress.email || (req.user && req.user.email),
+      phone: shippingAddress.phone || shippingAddress.phoneWithCountryCode,
+      addressLine1: shippingAddress.addressLine1 || shippingAddress.address,
+      addressLine2: shippingAddress.addressLine2 || "",
+      city: shippingAddress.city,
+      state: shippingAddress.state,
+      zipCode: shippingAddress.zipCode || shippingAddress.pincode,
+      shippingInfo: shippingAddress.shippingInfo || {},
+    };
+
+    if (
+      !normalizedShippingAddress.name ||
+      !normalizedShippingAddress.email ||
+      !normalizedShippingAddress.phone ||
+      !normalizedShippingAddress.addressLine1 ||
+      !normalizedShippingAddress.city ||
+      !normalizedShippingAddress.state ||
+      !normalizedShippingAddress.zipCode
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Name, email, phone, address, city, state, and zipCode/pincode are all required in shipping address",
+      });
+    }
+
     if (!paymentMethod) {
       return res.status(400).json({
         success: false,
@@ -48,6 +78,52 @@ const createOrder = async (req, res) => {
       });
     }
 
+    // Populate vendor ID for each item from the Product model
+    const itemsWithVendor = [];
+    for (const item of items) {
+      const prodId = item.productId || item._id;
+      if (!prodId) {
+        return res.status(400).json({
+          success: false,
+          message: `Product ID is missing for item: ${item.name}`,
+        });
+      }
+      const product = await Product.findById(prodId);
+      if (!product) {
+        return res.status(404).json({
+          success: false,
+          message: `Product not found: ${item.name}`,
+        });
+      }
+
+      let vendorId = product.vendor;
+      if (!vendorId) {
+        // Fallback to first available vendor in DB if product has no vendor assigned
+        const defaultVendor = await Vendor.findOne();
+        if (defaultVendor) {
+          vendorId = defaultVendor._id;
+        } else {
+          return res.status(500).json({
+            success: false,
+            message: `Product "${product.name}" has no vendor, and no default vendor exists in the system.`,
+          });
+        }
+      }
+
+      itemsWithVendor.push({
+        productId: prodId,
+        name: item.name,
+        price: item.price,
+        originalPrice: item.originalPrice,
+        quantity: item.quantity,
+        size: item.size,
+        color: item.color,
+        category: item.category,
+        image: item.image,
+        vendor: vendorId,
+      });
+    }
+
     // Calculate estimated delivery (7 days from now)
     const estimatedDelivery = new Date();
     estimatedDelivery.setDate(estimatedDelivery.getDate() + 7);
@@ -56,8 +132,8 @@ const createOrder = async (req, res) => {
     const order = new Order({
       orderId,
       user: userId,
-      items,
-      shippingAddress,
+      items: itemsWithVendor,
+      shippingAddress: normalizedShippingAddress,
       paymentMethod,
       orderSummary,
       estimatedDelivery,
