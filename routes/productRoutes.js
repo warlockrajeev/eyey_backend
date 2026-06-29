@@ -32,13 +32,27 @@ router.get("/csv-template", adminAuth, downloadCSVTemplate);
 // Admin routes
 router
   .route("/") // Changed from "/admin/products" to "/"
-  .post(adminAuth, upload.array("images", 4), createProduct) // Re-added adminAuth and removed temporary console.log
+  .post(
+    adminAuth,
+    upload.fields([
+      { name: "images", maxCount: 4 },
+      { name: "tryOnImage", maxCount: 1 },
+    ]),
+    createProduct
+  ) // Re-added adminAuth and removed temporary console.log
   .get(getProducts); // Restored original getProducts
 
 router
   .route("/:id") // Changed from "/admin/products/:id" to "/:id"
   .get(getProductById)
-  .put(adminAuth, upload.array("images", 4), updateProduct)
+  .put(
+    adminAuth,
+    upload.fields([
+      { name: "images", maxCount: 4 },
+      { name: "tryOnImage", maxCount: 1 },
+    ]),
+    updateProduct
+  )
   .delete(adminAuth, deleteProduct);
 
 export default router;

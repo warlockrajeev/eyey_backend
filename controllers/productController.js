@@ -28,13 +28,14 @@ export const createProduct = async (req, res, next) => {
       kids,
     } = req.body;
 
-    if (!req.files || req.files.length === 0) {
-      return res.status(400).json({ message: "No images uploaded" });
+    const imageFiles = req.files && req.files["images"] ? req.files["images"] : [];
+    if (imageFiles.length === 0) {
+      return res.status(400).json({ message: "No product images uploaded" });
     }
 
     const images = [];
 
-    for (const file of req.files) {
+    for (const file of imageFiles) {
       const cloudinaryResponse = await uploadOnCloudinary(file.path);
       if (cloudinaryResponse) {
         images.push({
@@ -49,6 +50,23 @@ export const createProduct = async (req, res, next) => {
     }
 
     req.body.images = images;
+
+    // Handle optional Try-On Frame image upload
+    const tryOnFiles = req.files && req.files["tryOnImage"] ? req.files["tryOnImage"] : [];
+    if (tryOnFiles.length > 0) {
+      const tryOnFile = tryOnFiles[0];
+      const cloudinaryResponse = await uploadOnCloudinary(tryOnFile.path);
+      if (cloudinaryResponse) {
+        req.body.tryOnImage = {
+          public_id: cloudinaryResponse.public_id,
+          url: cloudinaryResponse.url,
+        };
+      } else {
+        console.error(
+          `Failed to upload tryOnImage file ${tryOnFile.originalname} to Cloudinary`
+        );
+      }
+    }
     // Only assign req.body.user if req.admin.id is a valid ObjectId
     if (req.admin.id && mongoose.Types.ObjectId.isValid(req.admin.id)) {
       req.body.user = req.admin.id;
@@ -93,6 +111,17 @@ export const getProducts = async (req, res, next) => {
       query.category = req.query.category;
     }
 
+    // Filter by search query if provided in query params
+    if (req.query.search) {
+      const searchRegex = new RegExp(req.query.search, "i");
+      query.$or = [
+        { name: { $regex: searchRegex } },
+        { description: { $regex: searchRegex } },
+        { brand: { $regex: searchRegex } },
+        { category: { $regex: searchRegex } },
+      ];
+    }
+
     // Filter by hotSeller if provided in query params
     if (req.query.hotSeller) {
       // Convert string "true"/"false" to boolean
@@ -123,7 +152,16 @@ export const getProducts = async (req, res, next) => {
       query.kids = req.query.kids === "true";
     }
 
-    const products = await Product.find(query);
+    let queryBuilder = Product.find(query);
+
+    if (req.query.limit) {
+      const limitVal = parseInt(req.query.limit, 10);
+      if (!isNaN(limitVal)) {
+        queryBuilder = queryBuilder.limit(limitVal);
+      }
+    }
+
+    const products = await queryBuilder;
 
     res.status(200).json({
       success: true,
@@ -183,14 +221,21 @@ export const updateProduct = async (req, res, next) => {
     console.log("📦 Current product stock:", product.stock);
 
     // Handle Image Updates
-    if (req.files && req.files.length > 0) {
+    const imageFiles = req.files && req.files["images"] ? req.files["images"] : [];
+    if (imageFiles.length > 0) {
       // Delete old images from Cloudinary
-      for (const image of product.images) {
-        await cloudinary.uploader.destroy(image.public_id);
+      if (product.images && product.images.length > 0) {
+        for (const image of product.images) {
+          try {
+            await cloudinary.uploader.destroy(image.public_id);
+          } catch (err) {
+            console.error(`Failed to delete old image ${image.public_id} from Cloudinary:`, err);
+          }
+        }
       }
 
       const newImages = [];
-      for (const file of req.files) {
+      for (const file of imageFiles) {
         const cloudinaryResponse = await uploadOnCloudinary(file.path);
         if (cloudinaryResponse) {
           newImages.push({
@@ -200,6 +245,37 @@ export const updateProduct = async (req, res, next) => {
         }
       }
       req.body.images = newImages;
+    }
+
+    // Handle VTO Image Update
+    const tryOnFiles = req.files && req.files["tryOnImage"] ? req.files["tryOnImage"] : [];
+    if (tryOnFiles.length > 0) {
+      const tryOnFile = tryOnFiles[0];
+      // Delete old tryOnImage from Cloudinary if exists
+      if (product.tryOnImage && product.tryOnImage.public_id) {
+        try {
+          await cloudinary.uploader.destroy(product.tryOnImage.public_id);
+        } catch (err) {
+          console.error(`Failed to delete old tryOnImage ${product.tryOnImage.public_id} from Cloudinary:`, err);
+        }
+      }
+
+      const cloudinaryResponse = await uploadOnCloudinary(tryOnFile.path);
+      if (cloudinaryResponse) {
+        req.body.tryOnImage = {
+          public_id: cloudinaryResponse.public_id,
+          url: cloudinaryResponse.url,
+        };
+      }
+    } else if (req.body.clearTryOnImage === "true") {
+      if (product.tryOnImage && product.tryOnImage.public_id) {
+        try {
+          await cloudinary.uploader.destroy(product.tryOnImage.public_id);
+        } catch (err) {
+          console.error(`Failed to delete tryOnImage:`, err);
+        }
+      }
+      req.body.tryOnImage = null;
     }
 
     product = await Product.findByIdAndUpdate(req.params.id, req.body, {

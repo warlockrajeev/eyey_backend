@@ -50,8 +50,24 @@ import upload from "../middleware/upload.js";
 
 // Product management
 router.get("/products", vendorAuth, getVendorProducts);
-router.post("/products", vendorAuth, upload.array("images", 4), createVendorProduct);
-router.put("/products/:id", vendorAuth, upload.array("images", 4), updateVendorProduct);
+router.post(
+  "/products",
+  vendorAuth,
+  upload.fields([
+    { name: "images", maxCount: 4 },
+    { name: "tryOnImage", maxCount: 1 },
+  ]),
+  createVendorProduct
+);
+router.put(
+  "/products/:id",
+  vendorAuth,
+  upload.fields([
+    { name: "images", maxCount: 4 },
+    { name: "tryOnImage", maxCount: 1 },
+  ]),
+  updateVendorProduct
+);
 router.delete("/products/:id", vendorAuth, deleteVendorProduct);
 
 // Order management

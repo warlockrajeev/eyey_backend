@@ -79,6 +79,14 @@ const productSchema = new mongoose.Schema({
     type: String,
     default: "",
   },
+  tryOnImage: {
+    public_id: {
+      type: String,
+    },
+    url: {
+      type: String,
+    },
+  },
 
   user: {
     type: mongoose.Schema.ObjectId,
@@ -87,7 +95,6 @@ const productSchema = new mongoose.Schema({
   vendor: {
     type: mongoose.Schema.ObjectId,
     ref: "Vendor",
-    required: [true, "Product must belong to a vendor"],
   },
   createdAt: {
     type: Date,

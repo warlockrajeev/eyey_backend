@@ -247,9 +247,10 @@ export const getVendorProducts = async (req, res) => {
  */
 export const createVendorProduct = async (req, res) => {
     try {
+        const imageFiles = req.files && req.files["images"] ? req.files["images"] : [];
         const images = [];
-        if (req.files && req.files.length > 0) {
-            for (const file of req.files) {
+        if (imageFiles.length > 0) {
+            for (const file of imageFiles) {
                 const result = await uploadOnCloudinary(file.path);
                 if (result) {
                     images.push({
@@ -266,6 +267,19 @@ export const createVendorProduct = async (req, res) => {
             vendor: req.vendor._id,
             sellerName: req.vendor.businessName // Sync sellerName for frontend display
         };
+
+        // Handle tryOnImage upload for vendor
+        const tryOnFiles = req.files && req.files["tryOnImage"] ? req.files["tryOnImage"] : [];
+        if (tryOnFiles.length > 0) {
+            const tryOnFile = tryOnFiles[0];
+            const result = await uploadOnCloudinary(tryOnFile.path);
+            if (result) {
+                productData.tryOnImage = {
+                    public_id: result.public_id,
+                    url: result.url
+                };
+            }
+        }
 
         const product = await Product.create(productData);
         res.status(201).json(product);
@@ -298,16 +312,21 @@ export const updateVendorProduct = async (req, res) => {
         }
 
         // Handle Image Updates
-        if (req.files && req.files.length > 0) {
+        const imageFiles = req.files && req.files["images"] ? req.files["images"] : [];
+        if (imageFiles.length > 0) {
             // Delete old images from Cloudinary
             if (product.images && product.images.length > 0) {
                 for (const image of product.images) {
-                    await cloudinary.uploader.destroy(image.public_id);
+                    try {
+                        await cloudinary.uploader.destroy(image.public_id);
+                    } catch (err) {
+                        console.error(`Failed to delete old image ${image.public_id} from Cloudinary:`, err);
+                    }
                 }
             }
 
             const newImages = [];
-            for (const file of req.files) {
+            for (const file of imageFiles) {
                 const result = await uploadOnCloudinary(file.path);
                 if (result) {
                     newImages.push({
@@ -317,6 +336,37 @@ export const updateVendorProduct = async (req, res) => {
                 }
             }
             req.body.images = newImages;
+        }
+
+        // Handle tryOnImage Update
+        const tryOnFiles = req.files && req.files["tryOnImage"] ? req.files["tryOnImage"] : [];
+        if (tryOnFiles.length > 0) {
+            const tryOnFile = tryOnFiles[0];
+            // Delete old tryOnImage from Cloudinary if exists
+            if (product.tryOnImage && product.tryOnImage.public_id) {
+                try {
+                    await cloudinary.uploader.destroy(product.tryOnImage.public_id);
+                } catch (err) {
+                    console.error(`Failed to delete old tryOnImage ${product.tryOnImage.public_id} from Cloudinary:`, err);
+                }
+            }
+
+            const result = await uploadOnCloudinary(tryOnFile.path);
+            if (result) {
+                req.body.tryOnImage = {
+                    public_id: result.public_id,
+                    url: result.url
+                };
+            }
+        } else if (req.body.clearTryOnImage === "true") {
+            if (product.tryOnImage && product.tryOnImage.public_id) {
+                try {
+                    await cloudinary.uploader.destroy(product.tryOnImage.public_id);
+                } catch (err) {
+                    console.error(`Failed to delete tryOnImage:`, err);
+                }
+            }
+            req.body.tryOnImage = null;
         }
 
         const updatedProduct = await Product.findByIdAndUpdate(
