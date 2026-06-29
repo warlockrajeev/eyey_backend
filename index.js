@@ -28,9 +28,8 @@ const allowedOrigins = [
   "http://localhost:3000",
   "http://localhost:3001",
   "http://localhost:3002",
-  "https://eyeyoptics.vercel.app",
-  "https://eyey-admin.vercel.app",
-  "https://eyey-vendor.vercel.app",
+  "https://eyey-frontend.vercel.app",
+  "https://eyey-admin-seven.vercel.app",
   "https://eyey-vendor-inky.vercel.app",
 ];
 
